@@ -1,0 +1,38 @@
+\def\baselinestretch{1}
+\chapter{Conclusion}
+\ifpdf
+    \graphicspath{{Conclusions/ConclusionsFigs/PNG/}{Conclusions/ConclusionsFigs/PDF/}{Conclusions/ConclusionsFigs/}}
+\else
+    \graphicspath{{Conclusions/ConclusionsFigs/EPS/}{Conclusions/ConclusionsFigs/}}
+\fi
+
+\def\baselinestretch{1.66}
+
+This project sought to overcome the two main restrictions of FCIQMC by stochastically sampling the many-electron thermal density matrix rather than the many-electron wave function. Although sampling the density matrix increases the computational effort because the psips now have to live, die, clone and annihilate in a space that has squared in size, it in theory allows for the calculations of any quantum mechanical observable at finite-temperatures. 
+
+The algorithm was developed by studying an analogy between the evolution of the many-electron wave function in imaginary-time and the many-electron thermal density matrix as a function of inverse-temperature. A set of population dynamics, similar to those in FCIQMC were chosen so that they simulate a first-order finite difference approximation that relate the thermal density matrix at one inverse-temperature to the thermal density matrix at the step before. 
+
+The DMQMC algorithm was implemented in \texttt{FORTRAN90} and built upon a current highly parallel and optimised implementation of FCIQMC. It was decided to test the implementation on some well-studied two and three dimensional antiferromagnetic bipartite Heisenberg lattices because they remove the complication of the fermion sign-problem which plagues some many-electron models. At first, it was found that the DMQMC method was far less efficient than FCI for the $4\times4$ antiferromagnetic Heisenberg lattice and actually failed for the $6\times6$ antiferromagnetic Heisenberg lattice.
+
+It was found that the reason for this failure was that the number of psips on the trace decayed exponentially and quickly became undersampled. This was remedied by the introduction of an importance sampling method that looked to increase the sampling of rare spawning events. Under this importance sampling transformation it was found that the number of initial psips could be significantly reduced and that DMQMC could now be used to simulate larger systems for which FCI is unfeasible. 
+
+Futhermore, larger systems such as the $4\times4\times4$ antiferromagnetic Heisenberg lattice could be simulated with a number of psips that was a only a minute fraction of the total number of elements in the thermal density matrix. As expected, DMQMC was found to be less accurate than FCIQMC for calculating ground-state properties with a similar number of psips, but it has the benefit that all of data from the simulation was useful in determining finite-temperature properties. In FCIQMC relevant data can only really be retrieved once the system is in the ground-state in the limit of large imaginary-time.
+
+In theory it is simple to calculate the expectation value of any quantum mechanical observable in DMQMC. However, in practice it was difficult to directly sample the estimator for the heat capacity. This was due to a factor of $\beta^2$ in the estimator equation that leads to the amplification of statistical errors as $\beta$ becomes large. A solution was to calculate the derivative of the energy estimator using a cubic smoothing spline fit. However, this rather inelegant method leads to difficulties in obtaining statistical errors.
+
+The ease of obtaining the reduced density matrix from stochastic sampling of the full thermal density matrix opened up the possibility of calculating entanglement measures and an avenue into quantum information theory. Current QMC methods do not provide access to the reduced density matrix and other methods  are non-scalable or can only simulate one dimensional systems (DMRG). So there is need for methods such as DMQMC in quantum information. Two entanglement measures, Von-Neumann entropy and concurrence, were implemented of which the ground-state concurrence estimator was tested on one dimensional antiferromagnetic Heisenberg rings for which analytic values exist. 
+
+Some work on the DMQMC implementation is still needed. For example, the current implementation can only simulate systems within a fixed $M_S$ subspace. One needs to find a way of either simulating across all $M_S$ subspaces simultaneously or combining the results from all the different $M_S$ simulations. At this point, it would be possible to obtain the full finite-temperature picture across all $M_S$ values and it would allow for finite-temperature entanglement calculations. Additionally, it seems that the FCIQMC shift update algorithm introduces biases\footnote{There was not enough space in this report to discuss this in full.} and this problem must be solved.
+
+In conclusion, a new QMC method has been developed. It shares some of the important features of FCIQMC, but almost fully overcomes two of FCIQMC's main restrictions at the expense of efficiency. Some more work is required, but there are signs that it could be an important QMC method for finite-temperature calculations and could be used to tackle some poorly understood aspects of quantum information theory.\\
+
+\noindent Total words: 9997 (via TeXcount 2.3)
+
+%%% ----------------------------------------------------------------------
+
+% ------------------------------------------------------------------------
+
+%%% Local Variables: 
+%%% mode: latex
+%%% TeX-master: "../thesis"
+%%% End: 

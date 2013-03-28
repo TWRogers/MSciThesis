@@ -1,0 +1,7 @@
+\nomenclatureentry{zQMC@[{QMC}]\begingroup Quantum Monte Carlo\nomeqref {1.0}|nompageref}{1}
+\nomenclatureentry{zFCI@[{FCI}]\begingroup Full configuration interaction\nomeqref {1.0}|nompageref}{1}
+\nomenclatureentry{zRNG@[{RNG}]\begingroup Random number generator\nomeqref {1.0}|nompageref}{1}
+\nomenclatureentry{zDMC@[{DMC}]\begingroup Difussion Monte Carlo\nomeqref {1.0}|nompageref}{1}
+\nomenclatureentry{zFCIQMC@[{FCIQMC}]\begingroup Full configuration interaction quantum Monte Carlo\nomeqref {1.0}|nompageref}{2}
+\nomenclatureentry{zDMQMC@[{DMQMC}]\begingroup Density matrix quantum Monte Carlo\nomeqref {1.0}|nompageref}{2}
+\nomenclatureentry{zGFQMC@[{GFQMC}]\begingroup Green's function quantum Monte Carlo\nomeqref {1.0}|nompageref}{2}

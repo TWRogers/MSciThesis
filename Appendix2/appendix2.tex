@@ -1,0 +1,29 @@
+\chapter{Appendix B: $C_h$ spline derivative estimator}
+This appendix includes more detail on the calculation of the heat capacity in a uniform magnetic field using the derivative of the DMQMC finite-temperature energy estimator.
+
+\section*{Smoothing spline fit}
+In Sec.~\ref{sec:heatCapacity} it was found that the heat capacity in a uniform magnetic field could be expressed as
+\begin{equation}
+C_{h} = -\beta^2\frac{d\langle H\rangle}{d\beta}.
+\end{equation}
+
+The problem here is that the $\langle H\rangle$ data contains statistical noise and it thus proves difficult to obtain an accurate approximation of the gradient function. However, it is possible to fit a smooth curve to the data using a smoothing spline\cite{Reinsch}. A spline is essentially a piece-wise polynomial. The data is split into regions and each region is approximated by a polynomial, usually a cubic.
+
+For a sequence of measurements $M_i$ that can be modelled as $M_i =F(x_i)$, where $\{ x_i \lvert x_1 < x_2 < \dots < x_N, x_i \in \mathcal{Z} \}$ and $F$ is some function, the smoothing spline estimate $\bar{F}$ of $F$ is defined as the function that minimises 
+\begin{equation}
+\sum^n_{i=1} (M_i - \bar{F}(x_i))^2 + \eta \int_{x_1}^{x_N} \bar{F}''(x)^2 dx.
+\end{equation}
+Here $\eta \geq 0$ is the smoothing parameter which controls the smoothing characteristics $\bar{F}$. For $\eta \to 0$ $\bar{F}$ becomes an interpolating spline and for $\eta \to \infty$ $\bar{F}$ converges to a linear least squares estimate. 
+
+\texttt{Python} has a smoothing spline implementation, \texttt{splev}, in the \texttt{scipy.interpolate} sub-package. In this the smoothing parameter is chosen so that it is between $N-\sqrt{2N} < \eta < N+\sqrt{2N}$ and the best fit of the data can be found by trial and error. The \texttt{splev} function can also return derivatives of $\bar{F}$, which proved useful for calculating the $C_h$.
+
+So during this investigation the DMQMC spline derivative estimate of $C_h$ was determined in a post-processing step. This step was inelegant as it relied on some trial and error and it was difficult to obtain errors.
+
+
+
+
+
+%%% Local Variables: 
+%%% mode: latex
+%%% TeX-master: "../thesis"
+%%% End: 

@@ -1,0 +1,33 @@
+\chapter{Appendix C: Code}
+
+This appendix presents some of the main components of the DMQMC implementation in \texttt{FORTRAN 90} that were developed during this project. The \texttt{dmqmc} module in Code 1 contains the main outline of the algorithm as presented in Sec.~\ref{sec:implementation}. \texttt{dmqmc\_procedures.f90} and \texttt{dmqmc\_estimators.f90} in Code 2 and Code 3 contain some important general procedures and the implementation of the estimators respectively.
+
+\lstset{
+columns=fullflexible,
+basicstyle=\ssmall\ttfamily,
+language=Fortran,
+numbers=left,
+numberstyle=\tiny,
+frame=tb,
+columns=fullflexible,
+breaklines=true,        % sets automatic line breaking
+breakatwhitespace=false,    % sets if automatic breaks should only happen at whitespace
+showspaces=false,               % show spaces adding particular underscores
+showstringspaces=false,         % underline spaces within strings
+showtabs=false,                 % show tabs within strings adding particular underscores
+tabsize=2,          % sets default tabsize to 2 spaces
+keywordstyle=\color{blue},          % keyword style
+commentstyle=\color{dkgreen},       % comment style
+stringstyle=\color{mauve},         % string literal style
+}
+
+\lstinputlisting[caption=dmqmc.f90, label = dmqmc]{dmqmc.f90}
+\newpage
+\lstinputlisting[caption = dmqmc\_procedures.f90, label = procs]{dmqmc_procedures.F90}
+\newpage
+\lstinputlisting[caption= dmqmc\_estimators.f90, label = ests]{dmqmc_estimators.F90}
+
+%%% Local Variables: 
+%%% mode: latex
+%%% TeX-master: "../thesis"
+%%% End: 

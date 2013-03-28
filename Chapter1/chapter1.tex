@@ -1,0 +1,345 @@
+\chapter{The DMQMC algorithm}
+\label{ch:chapter1}
+\ifpdf
+    \graphicspath{{Chapter1/Chapter1Figs/PNG/}{Chapter1/Chapter1Figs/PDF/}{Chapter1/Chapter1Figs/}}
+\else
+    \graphicspath{{Chapter1/Chapter1Figs/EPS/}{Chapter1/Chapter1Figs/}}
+\fi
+
+In this chapter the DMQMC algorithm is formulated using an analogy between the imaginary-time Schr\"odinger equation and the evolution of the many-electron thermal density matrix as a function of inverse-temperature. Several features of FCIQMC are used in the construction of this algorithm in a way that maintains FCI-quality results. Finally, the main features of an optimised and highly parallel implementation of the DMQMC algorithm are discussed.
+
+\section{The thermal density matrix}
+\label{sec:DensityMatrix}
+
+In quantum mechanics the density operator\cite{Isham} is any operator, $\rho$, that satisfies three properties:
+\begin{enumerate}
+\item It is Hermitian i.e. $\rho = \rho^{\dag}$
+\item It is a positive, semi-definite operator, i.e. $\bra{\psi}\rho\ket{\psi} \geq 0\; \; \forall\; \ket{\psi}\in\mathcal{H}$ 
+\item It has unit trace i.e. $\textnormal{Tr}\rho=1$
+\end{enumerate}
+As $\rho$ is Hermitian, it can be expanded using the spectral theorem,
+\begin{equation}
+\rho = \sum_{j=1}p_j\ket{\psi_j}\bra{\psi_j},
+\end{equation}
+where $\{p_j\}$ are the eigenvalues of $\rho$ and are also the classical probabilities that the system is in the vector state $\ket{\psi_j}$. A density operator is useful for describing and calculating the properties of a mixed state. A mixed state is a statistical ensemble of several quantum states and arises in situations where there is classical uncertainty (which is different to quantum uncertainty). 
+
+One major benefit of constructing a density matrix is that it allows for very simple calculations of any quantum mechanical observable, $O$:
+\begin{eqnarray}
+\label{eq:estimator}
+\langle O \rangle&=&\sum_i p_i\bra{\psi_i} O \ket{\psi_i}\nonumber\\
+&=&\sum_i \bra{\psi_i}\rho\ket{\psi_i}\bra{\psi_i} O \ket{\psi_i}\nonumber\\
+&=&\sum_i \bra{\psi_i}\rho O\ket{\psi_i}\nonumber\\
+&=&\sum_{i,j}\rho_{ij} O_{ji}.
+\end{eqnarray}
+In the last line the matrix representations of the operators $\rho$ and $O$ have been adopted.
+
+This hints that the formulation of a QMC method that can stochastically sample the many-electron density operator, could provide a simple calculation of the expectation value of any quantum mechanical observable. There is no restriction on the operator, $O$, other than the requirement that it is expressed in the same basis as the density matrix. Eq.~\ref{eq:estimator} is the blue-print used for calculating all estimators of quantum mechanical observables in this section.
+
+An important mixed state is the thermal state\cite{Isham}, which describes a quantum statistical system at temperature $T$. In this case, the classical probability distribution is described by the the Boltzmann distribution and the thermal density operator is
+\begin{equation}
+\label{eq:thermalState}
+\rho = \frac{e^{-\beta H}}{Z(\beta)},
+\end{equation}
+where $H$ is the Hamiltonian operator, $\beta=1/T$ is the inverse-temperature in natural units and $Z(\beta) = \textnormal{Tr}(e^{-\beta H})$ is the partition function of the system.
+
+Applying the spectral theorem to the Hamiltonian, Eq.~\ref{eq:thermalState} becomes
+\begin{equation}
+\rho = \sum_j{\frac{e^{-\beta E_j}}{Z(\beta)}\ket{E_j}\bra{E_j}}. 
+\end{equation}
+This reflects the classical uncertainty induced by thermal fluctuations of the energy state that the system is in. The canonical partition function can be expressed as
+\begin{equation}
+\label{eq:PartitionFunction}
+Z(\beta) = \sum_{j=1}e^{-\beta E_j}.
+\end{equation}
+
+From now on the convention
+\begin{equation}
+\label{eq:rhoConvention}
+\rho =  e^{-\beta H} \implies \langle O \rangle = \frac{\sum_{i,j}\rho_{ij} O_{ji}}{\sum_i\rho_{ii}}
+\end{equation}
+is adopted to keep notation simple.
+% ------------------------------------------------------------------------
+
+\section{An analogy with FCIQMC}
+Using the convention from Eq.~\ref{eq:rhoConvention} it is evident that, in its matrix representation, $\rho$ obeys the symmetrised Bloch equation\cite{FoulkesSpencer2011}\footnote{The symmetrised version of the Bloch equation is used so that there is spawning in two directions rather than one, which makes more sense intuitively. }
+\begin{equation}
+\label{eq:numeratorPDE}
+\frac{\partial\rho_{ij}}{\partial\beta} = -\frac{1}{2}\sum_{k}H_{ik}\rho_{kj}+\rho_{ik}H_{kj},
+\end{equation}
+with the initial condition
+\begin{equation}
+\bm{\rho}\left(\beta = 0\right) = \bm{I},
+\end{equation}
+where $\bm{I}$ is the identity matrix with the same dimensions as the thermal density matrix $\bm{\rho}$.
+
+Now as the partition function is simply $\textnormal{Tr}\bm{\rho}$, Eq.~\ref{eq:numeratorPDE} provides all of the information required to calculate the normalised thermal density matrix. The Bloch equation (Eq.~\ref{eq:numeratorPDE}) is analogous to the imaginary-time Schr\"{o}dinger equation. The columns of the many-electron density matrix evolving as a function of inverse-temperature, rather than a many-electron wave function evolving in imaginary-time,
+\begin{equation}
+\label{eq:imaginaryTimeSchrodinger}
+\frac{\partial\psi_i}{\partial\tau} = -\sum_j H_{ij}\psi_j,
+\end{equation}
+where $\psi_i$ is the vector representation of the many-electron wave function in a discrete space (e.g. slater determinant space, see Appx. A) and $\tau = it$ is the imaginary-time.
+
+In the true spirit of this analogy, the ground-state many-electron density matrix is projected out in the large $\beta$ (or zero temperature) limit,
+\begin{equation}
+\label{eq:zeroTemperature}
+\rho(\beta\to\infty)=\lim_{\beta \to \infty}\sum_{i}e^{-\beta E_i}\ket{E_i}\bra{E_i} \approx e^{-\beta E_0}\ket{E_0}\bra{E_0},
+\end{equation}
+where $\ket{E_0}$ is the ground-state or lowest eigenvector of $H$ and $E_0$ is the ground-state energy eigenvalue.
+
+This is similar to in FCIQMC, where the ground-state eigenvector, $\bm{\psi}_0$, of the many-electron Hamiltonian matrix, $\bm{H}$, is projected out in the long imaginary-time limit\cite{Spencer2012},
+\begin{eqnarray}
+\bm{\psi}(\tau \to \infty) &=& \lim_{\tau \to \infty} e^{-\bm{H} \tau}\sum_{\alpha} v_\alpha(0) \bm{\psi}_{\alpha}\nonumber \\
+&=& \lim_{\tau \to \infty} \sum_{\alpha} v_\alpha(0) e^{-E_{\alpha} \tau}\bm{\psi}_{\alpha} \nonumber\\
+&\approx& v_0(0)e^{-E_0 \tau}\bm{\psi}_0,
+\end{eqnarray}
+where the initial vector has been expanded in terms of the complete orthonormal set of eigenvectors, $\{\bm{\psi}_{\alpha}\}$ of $\bm{H}$ i.e. $\bm{\psi}(0) = \sum_{\alpha} v_{\alpha}(0) \bm{\psi}_{\alpha}$.
+
+So a QMC method based on solving Eq.~\ref{eq:numeratorPDE} would evolve towards the ground-state of the many-electron system in a similar way to in FCIQMC, however it would also allow for the density matrix to be sampled at finite temperatures.
+
+The difficult factor of $e^{-\beta E_0}$ in Eq.~\ref{eq:zeroTemperature} can be removed by setting $E_0 = 0$. In reality $E_0$ is usually unknown and so instead one can solve,
+\begin{equation}
+\frac{\partial\rho_{ij}}{\partial\beta} = \frac{1}{2}\sum_{k}T_{ik}\rho_{kj}+\rho_{ik}T_{kj},
+\end{equation}
+where $T_{ik} = -(H_{ik}-S\delta_{ik})$ is the ``update matrix'' and $S$ is the energy shift, which can be adjusted carefully to keep normalisation approximately constant\cite{Spencer2012}. 
+
+% ------------------------------------------------------------------------
+\section{Population dynamics}
+\label{sec:populationDynamics}
+So drawing upon the analogy between  Eq.~\ref{eq:imaginaryTimeSchrodinger} and Eq.~\ref{eq:numeratorPDE}, FCIQMC can be adapted so that rather than stochastically sampling the many-electron wave function, it performs a stochastic sampling of the many-electron thermal density matrix. As in FCIQMC, one considers a collection of markers or ``psips''\footnote{``psips'' stands for ``psi particles''\cite{Anderson1975} but there was a temptation to call them ``rhips''} that are distributed over the elements of the density matrix. Now each psip still has a ``charge'' $q = \pm 1$, but their location is now labelled by two indices $(i,j)$.
+
+The fact that the solution to Eq.~\ref{eq:numeratorPDE} is a matrix implies that the psips can now spawn from two ends. One end can spawn in one direction and the other end can spawn in a direction that is perpendicular. The algorithm for the DMQMC can be summarised as follows:
+
+At each inverse-temperature step $\Delta\beta$, loop over the population of psips and allow each end, $A$ and $B$, of the psip to spawn a ``child'' at other locations according to the following set of rules: 
+\begin{enumerate}
+\item The probability that end $A$ of a psip at $(i,j)$ spawning a child at $(k,j)$ is $\frac{1}{2}\left|T_{ki}\right|\Delta\beta$
+\item The probability that end $B$ of a psip at $(i,j)$ spawning a child at $(i,k)$ is $\frac{1}{2}\left|T_{kj}\right|\Delta\beta$
+\item If end $A$ of a parent psip with charge $q_{parent}$ at location $(i,j)$ spawns a child at $(k,j)$, the charge of the child is given by $q_{child | A}=\textnormal{sign}(T_{ki})q_{parent}$
+\item If end $B$ of a parent psip with charge $q_{parent}$ at location $(i,j)$ spawns a child at $(i,k)$, the charge of the child is given by $q_{child | B}=\textnormal{sign}(T_{kj})q_{parent}$
+\end{enumerate}
+At the end of each inverse-temperature step, after each psip has spawned as many times as it can, pairs of walkers of opposite charge at the same location annihilate each other and are removed from the simulation.
+
+\section{First order finite-difference approximation}
+
+The motivation for this algorithm is that the dynamics satisfy a first-order Euler finite-difference approximation of Eq.~\ref{eq:numeratorPDE}. The expected charge, $\bar{q}_{ij}\left(\beta+\Delta\beta\right)$, at location $(i,j)$ at inverse-temperature $\beta + \Delta\beta$ is related to the expected charges $\bar{q}_{kj}\left(\beta\right)$ and  $\bar{q}_{ik}\left(\beta\right)$ at inverse-temperature $\beta$ by
+\begin{equation}
+\bar{q}_{ij}\left(\beta+\Delta\beta\right) = \bar{q}_{ij}\left(\beta\right)+\frac{1}{2}\sum_{k}\left(T_{ik}\bar{q}_{kj}+\bar{q}_{ik}T_{kj}\right)\Delta\beta.
+\label{eq:FirstOrderEuler}
+\end{equation}
+The first term on the right-hand side describes the total charge of the walkers that were at $(i,j)$ at inverse-temperature $\beta$. The second term describes the spawning of walkers onto $(i,j)$ over the inverse-temperature interval $\Delta\beta$. As this is a first-order Euler finite approximation of Eq.~\ref{eq:numeratorPDE}, the distribution of charges is proportional to the density matrix. 
+
+The stability\cite{Contaldi2011} of the first order finite-difference approximation in Eq.~\ref{eq:FirstOrderEuler} can be analysed by making a linear perturbation to the density matrix i.e $\bm{\rho} \to \bm{\rho} + \bm{\epsilon}$. This implies that for the $n^{th}$ $\beta$-step,
+\begin{equation}
+\bm{\epsilon}_{n+1} = (\bm{I}+\Delta\beta \bm{T}) \bm{\epsilon}_n.
+\end{equation}
+Now this is stable if $\lvert \lambda^i \rvert \le 1$, where $\{\lambda^i\}$ are the eigenvalues of $(\bm{I}+\Delta\beta \bm{T})$. So this leads to the stability condition, $\Delta \beta \le 2/(E_{max}-S)$, where $E_{max}$ is the maximum energy eigenvalue of the Hamiltonian. The shift, $S$, can be assumed to be approximately equal to the energy of the system and is most negative at the ground-state. So in the worst case $\Delta\beta$ is limited to
+\begin{equation}
+0 < \Delta \beta \le \frac{2}{E_{max}-E_0}.
+\end{equation}
+
+Furthermore, by considering the taylor expansion of the density matrix at inverse-temperature $\beta + \Delta\beta$, it is evident that the local error for a density matrix element is $\mathcal{O}(\Delta\beta^2)$. Note that statistical errors will also be accrued because Eq.~\ref{eq:FirstOrderEuler} is integrated stochastically. This analysis of the accuracy and the stability was taken into consideration when selecting the $\Delta\beta$ in order to avoid instability or unnecessarily large errors. For all simulations that follow in this report $\Delta\beta = 0.1$ was chosen for stability and also as a compromise between accuracy and efficiency.
+
+\section{Shift update algorithm}
+The algorithm for updating the shift $S$ was first used by Umrigar\cite{Umrigar1993} in DMC but was also adopted by the inventors of FCIQMC\cite{Booth2009}. In this, $S$ is adjusted according to
+\begin{equation}
+S(\beta + A\Delta\beta) = S(\beta) + \frac{\zeta}{A\Delta\beta}\ln\left( \frac{N_p(\beta + A\Delta\beta)}{N_p(\beta)}\right),
+\end{equation}
+where $A$ is the number of $\beta$-steps between shift updates, $\zeta$ is a shift damping parameter and $N_p(\beta)$ is the total number of psips at the inverse-temperature $\beta$. During simulations, $\zeta$ is chosen carefully to prevent large fluctuations in $S$. It should also be noted that by averaging the shift over many iterations, it can be used as an estimator for the ground-state energy in a similar way to in FCIQMC. However, this approach was not adopted during this project.
+
+\section{The spin-$1/2$ Heisenberg model}
+\label{sec:Heisenberg}
+In 1926, shortly after the birth of quantum mechanics, Werner Heisenberg\cite{Heisenberg1926} and Paul Dirac\cite{Dirac1926} independently recognised that the new theory could be used to describe the mysterious properties of ferromagnetism. They realised that quantum mechanics implied the existence of an effective interaction, the exchange interaction, between electron spins that is caused by the combined effects of the Pauli exclusion principle and the Coulomb repulsion between them\cite{Karbach1998}.
+
+The Hamiltonian that describes the  exchange interactions between a set of quantum mechanical spins (with periodic boundary conditions) is
+\begin{equation}
+\label{eq:HeisenbergHamiltonian}
+H = -J\sum_{\langle i, j \rangle} S_{i} S_{j} +h\sum_{i}S^z_i,
+\end{equation}
+where $S = \{S^x,S^y,S^z\} = \frac{1}{2}\{\sigma^x,\sigma^y,\sigma^z\}$ are the quantum spin operators expressed in terms of the Pauli spin matrices, $h$ is a uniform magnetic field in the $z$-direction and $J$ is the coupling constant. Here it has been assumed that nearest-neighbour interactions are dominant, hence the summation is only over nearest-neighbours. Furthermore, it is assumed that the system is isotropic so that $J$ is the same between any two neighbouring spins. 
+
+The coupling constant $J$ plays a big role in determining the physical properties of the system. If there is no externally applied magnetic field ($h=0$) then for $J > 0$ the ground-state is always ferromagnetic, where neighbouring spins tend to align themselves in the same direction. On the other hand, for $J<0$, the ground-state is antiferromagnetic, where neighbouring spins point in opposite directions.
+
+For the Heisenberg model with $N$ spins, $H$ acts on a $2^N$ dimensional Hilbert space, which is spanned by the orthogonal basis vectors, or spin configurations, $\ket{s_1s_2\dots s_N}$. Here, $s_n$ can represent either a spin in the positive $z$-direction (spin up), $s_n = \textnormal{}\uparrow$, or a spin in the negative $z$-direction (spin down), $s_n=\textnormal{}\downarrow$. On implementing DMQMC for the Heisenberg model, bitstrings can be used to represent a given spin-configuration of the system. For example, the configuration for a system of $N$ spins can be represented by a string of $N$ binary digits, with a $1$ representing a spin up and $0$ a spin down. 
+
+The Heisenberg Hamiltonian, Eq.~\ref{eq:HeisenbergHamiltonian} can also be expressed in terms of the spin flip operators $S^{\pm} = S^x \pm i S^y$,
+\begin{equation}
+H = -J\sum_{\langle i, j \rangle} \left[\frac{1}{2}\left(S^{+}_{i} S^{-}_{j} + S^{-}_{i} S^{+}_{j}\right)+S^z_{i}S^z_{j}\right]+h\sum_{i}S^z_i.
+\end{equation}
+This gives a more intuitive feel for the action of the Hamiltonian on a given configuration in the Heisenberg model. Every non-zero off-diagonal element of the Hamiltonian flips a pair of neighbouring spins from $\uparrow\downarrow$ to $\downarrow\uparrow$ and vice versa. So a matrix element, $H_{ij}$, has a non-zero value of $-J/2$, if the configurations $\ket{i}$ and $\ket{j}$ differ by a spin-flip of neighbouring anti-aligned spins. In other words, the two configurations are a single excitation apart.
+
+For the diagonal elements, $H_{ii}$, neighbouring spins in the configuration, $\ket{i}$, that are aligned ($\uparrow\uparrow$ or $\downarrow\downarrow$) give a contribution of $-J/4$. Neighbouring spins that are anti-aligned ($\downarrow \uparrow$ or $\uparrow\downarrow$) give a contribution of $J/4$. For a single total spin ($M_S$) subspace\footnote{The current DMQMC implementation only considers a single $M_S$ subspace during a simulation. This is because the code is built upon an FCIQMC code, which only requires simulations in a single $M_S$ subspace, the one that contains the ground-state. Unfortunately, there was not enough time during this project to combine all $M_S$ subspaces.}, the magnetic field only affects the diagonal elements of the Hamiltonian,
+\begin{equation}
+\label{eq:MagneticHamiltonian}
+\bm{H}(h) = \bm{H}(h=0) + \frac{hM_S}{2} \bm{I}.
+\end{equation}
+
+\section{Implementation}
+\label{sec:implementation}
+The DMQMC algorithm was implemented in \texttt{FORTRAN 90} (see Appdx. C) and was an adaptation of James Spencer's optimised and highly parallel FCIQMC code. As this code adopted the same spawning and death/clone steps as the original FCIQMC method\cite{Booth2009}, the DMQMC algorithm has been implemented in a slightly different way to in Sec.~\ref{sec:populationDynamics}. To be specific, the effect of the shift is simulated by a death/clone step rather than by changing the spawning probabilities.
+
+In a simulation, the statistics for each $\beta$-step are collected from a number of different ``$\beta$-loops'', each of which start with a different random number generator (RNG) seed. In each $\beta$-loop the main steps are:
+\begin{enumerate}
+\item Initiate the psip population on the diagonal of the density matrix
+\item Update DMQMC estimators and initialise shift
+\item Move to next $\beta$-step
+\item Loop over all psips and attempt to spawn progeny onto two other connected density matrix elements
+\item At the same time, attempt to kill or clone each parent psip\footnote{The combination of steps 4 and 5 is equivalent to the spawning step described in Sec.~\ref{sec:populationDynamics} using the update matrix $T$. This was how the FCIQMC algorithm was originally proposed by Booth \textit{et al.}\cite{Booth2009}.}
+\item Annihilate psips with opposite charges that occupy the same density matrix element
+\item Update DMQMC estimators and shift (if necessary)
+\item Repeat steps 3-7 until the user-defined maximum $\beta$ has been reached
+\end{enumerate}
+
+In this implementation the position of a psip within the density matrix is represented by two bitstrings, with one corresponding to row position and the other to column position.  The bitstring can also be seen as a representation of the configuration of spins in the Heisenberg model (Sec.~\ref{sec:Heisenberg}). The implementation of the main steps in the DMQMC algorithm is described in more detail below.
+
+\subsection{Initial condition}
+The initial distribution of psips must be along the diagonal of the density matrix as this corresponds to a stochastic sampling of the identity matrix, which is the initial condition for the DMQMC algorithm. In order to create a psip on the diagonal, all spins in both bitstrings, that represent a psips position, are initially set down. Then spins are chosen at random and flipped up (in both bitstrings) until the configuration corresponds to the correct total spin value for the current simulation. As both bitstrings are equal, this must correspond to a diagonal element of the density matrix. The process is repeated until the correct number of initial pips have been spawned.
+\subsection{Spawning}
+The spawning is performed in a way that is very similar to in FCIQMC, but now a psip can attempt to spawn from both of it's ``spawning ends'', labelled $A$ and $B$. One spawning end attempts to spawn onto a density matrix element in the same row, whilst the other end attempts to spawn on a density matrix element in the same column. In order to achieve this for the Heisenberg model, a single random excitation\footnote{For the Heisenberg model the spawning corresponding Hamiltonian element is zero if the configurations differ by more than one excitation, so the spawning probability would be zero. An excitation is defined as flipping two adjacent and anti-parallel spins so that the total spin quantum number is conserved}, is made to the bitstring that corresponds to the current spawning end. 
+%For example,
+%\begin{center}
+%\noindent Spawning from $A$ $\implies (110010, 011001) \to (110001, 011001)$\\
+%\noindent Spawning from $B$ $\implies(110010,011001) \to (110010,010101)$
+%\end{center}
+
+The probability of spawning a psip on this new density matrix element, $\rho_{ik}$, from spawning end $A$ is then given by
+\begin{equation}
+p_s(i,k | i,j) = \frac{1}{2}\frac{\Delta\beta\lvert H_{jk}\rvert}{P_{gen}(k|j)},
+\end{equation}
+where $P_{gen}$ is the probability of generating the single excitation from $\ket{j}$ to $\ket{k}$. Here, the efficiency of the algorithm has been improved by only attempting to spawn to a single connected density matrix element. Hence, the re-weighting of the spawning probability by $P_{gen}$.
+
+In a similar way, the probability of spawning a psip on a new density matrix element $\rho_{kj}$ from spawning end $B$ is given by
+\begin{equation}
+p_s(k, j | i,j) = \frac{1}{2}\frac{\Delta\beta\lvert H_{ik}\rvert}{P_{gen}(k|i)}.
+\end{equation}
+
+In general, $\lfloor p_s \rfloor$ psips are always spawned and a further psip is spawned if $p_s - \lfloor p_s\rfloor > R$, where $0 \le R \le 1$ is a uniformly distributed pseudorandom number\footnote{Random numbers were generated using the \texttt{dSFMT} double-precision pseudorandom number generator\cite{Saito2009}.}.
+
+\subsection{Diagonal death/cloning step}
+The diagonal death/cloning step was performed in a similar way to the original FCIQMC code, but with a contribution from both spawning ends. For either of the spawning ends labelled by $\ket{i}$, the ``probability'' that the parent psip is killed by that spawning end is
+\begin{equation}
+p_d(i) = \frac{1}{2}\Delta\beta(H_{ii}-S).
+\end{equation}
+
+In the current DMQMC implementation the probabilities of each spawning end are combined for simplicity. So for a density matrix element $\rho_{ij}$, the probability of a parent psip being killed is
+\begin{equation}
+p_d(i,j) = p_d(i) + p_d(j) = \left(\frac{H_{ii}+H_{jj}}{2} -S\right)\Delta\beta.
+\end{equation}
+For $p_d \ge 0$, $\lfloor p_d \rfloor$ psips are always killed and a further psip is killed if $p_d - \lfloor p_d\rfloor > R$, with $0 \le R \le 1$ again being a uniformly distributed pseudorandom number. Moreover, in the rare event that $p_d < 0$, then $\lfloor \lvert p_d \rvert \rfloor$ psips are always cloned and a further psip is cloned if  $\lvert p_d \rvert - \lfloor \lvert p_d \rvert\rfloor > R$.
+
+\subsection{Energy estimator}
+The calculation of the energy estimator is simplified if the Hamiltonian and the thermal density matrix are symmetric, which is the case for the Heisenberg Hamiltonian in Eq.~\ref{eq:HeisenbergHamiltonian}. The expression for the estimator can be written
+\begin{equation}
+\label{eq:energyEstimator}
+\langle H\rangle = \frac{\sum_{i,j} \rho_{ij} H_{ij}}{\sum_i \rho_{ii}}.
+\end{equation}
+Now the denominator is trivial to calculate -- it is the sum of the psip charges, $q_{ii}$, on the diagonal of the density matrix.
+
+The numerator requires slightly more thought. As highlighted in Sec.~\ref{sec:Heisenberg} off-diagonal elements of the Heisenberg Hamiltonian, $H_{ij}$ are only non-zero if the configurations $\ket{i}$ and $\ket{j}$ differ by a single excitation. In this case the density matrix element with total psip charge $q_{ij}$, contributes $-Jq_{ij}/2$ to the numerator of the energy estimator. 
+
+The two bitstrings that label the density matrix element can be compared, using the a bit-wise \texttt{XOR} operation\footnote{In more than one dimension, one must also test whether the two spins that are flipped between the two bitstrings are neighbours. This can be done by storing a list of neighbouring spins.}. Half of the sum of the elements of the resultant bitstring is equal to the number of excitations. For example consider the two bitstrings $110100$ and $011001$. They differ by  two excitations - to make them equal the two central spins and also the spins on both ends need to be flipped. In terms of the \texttt{XOR} operator this gives 
+\begin{equation}
+110100 \texttt{ .XOR. } 011001 = 101101,
+\end{equation}
+from which it is clear that the two bitstrings differ by two excitations.
+
+The same bit-wise \texttt{XOR} operation can also be used to check whether an element is on the diagonal of the density matrix. In this case the contribution to the numerator of Eq.~\ref{eq:energyEstimator} is $q_{ii} H_{ii}$ where $H_{ii}$ can be determined as described at the end of Sec.~\ref{sec:Heisenberg}
+
+\subsection{Squared staggered magnetisation estimator}
+\label{sec:stagMagEstimator}
+Staggered magnetisation is an order parameter of the antiferromagnetic Heisenberg model described in Sec.~\ref{sec:Heisenberg}. An order parameter is a measure of the degree of order in a system and ranges between zero for total disorder and some maximum non-zero value for complete order. This measure usually changes during a phase transition. For a bipartite antiferromagnetic Heisenberg lattice that can be partitioned into two sublattices $a$ and $b$ such that neighbouring spins are on separate sublattices, the staggered magnetisation is given by\cite{Runge1992a}
+\begin{eqnarray}
+m^{\dagger} &=& \sqrt{\langle (M^{\dagger})^2 \rangle}, \\
+M^{\dagger} &= &\frac{1}{N}\sum_{i=1}^N \epsilon_i S_i\\
+\langle (M^{\dagger})^2 \rangle &=&\frac{\sum_{i,j}( M^{\dagger})^2_{ij} \rho_{ji}}{\sum_i\rho_{ii}}\label{eq:numeratorStaggered}
+\end{eqnarray}
+Where the co-efficient $\epsilon_i$ is $+1$ if the site $i$ is on one sublattice and is $-1$ if site $i$ is on the other sublattice. For the classical antiferromagnetic ground-state, or the N\'eel state, $m^{\dagger} = \frac{1}{2}$.\footnote{An interesting point is the difference in order for a quantum ground-state and the classical N\'eel state. When no external magnetic field is applied, the order of the quantum ground-state is zero\cite{Brink}. This is as a result of intrinsic zero-point quantum spin fluctuations in the ground-state\cite{Henley2007}}
+
+It is easy to calculate the estimator for the squared staggered magnetisation if $(M^{\dagger})^2$ is expressed in the form:
+\begin{equation}
+(M^{\dagger})^2 = \frac{1}{N^2}\sum_{i,j} \epsilon_{i} \epsilon_{j} (S_i^xS_j^x + S_i^yS_j^y + S_i^zS_j^z).
+\end{equation}
+Now for diagonal elements of $(M^{\dagger})^2$, the $x$ and $y$ spin operator terms only contribute for $i = j$. If this is the case then both terms contribute $1/4N$ to the diagonal element. The contribution from the $z$ spin operator term can be deduced from the total number of up spins, $N_{\uparrow}$, and the total number of up spins on sublattice $a$, $N_{\uparrow}^a$. Overall the diagonal elements are given by 
+\begin{equation}
+(M^{\dagger})^2_{ii} = \frac{(2N_{\uparrow}^{a,i}-N_{\uparrow})^2 + \frac{N}{4}}{N^2},
+\end{equation}
+where $N_{\uparrow}^{a,i}$ is the number of up spins on sublattice $a$ for configuration $\ket{i}$. In the current implementation, this calculation of $N_{\uparrow}^{a,i}$ is made highly efficient by performing a bit-wise \texttt{AND} operation on the bitstring representation of $\ket{i}$ with a boolean mask for subsystem $a$. The sum of the elements of the resultant bitstring is equal to $N_{\uparrow}^{a,i}$.
+
+For off-diagonal elements, $(M^{\dagger})^2_{ij}$, the contributions from the $x$ and $y$ spin operator terms are non-zero if $\ket{i}$ and $\ket{j}$ differ by one (not necessarily nearest-neighbour) excitation. If this is the case then $(M^{\dagger})^2_{ij} = \pm 1/N^2$ depending upon whether the two spins that have been flipped are on the same lattice. Whether they are on the same lattice can be checked very quickly using the boolean mask for system $a$.
+
+So in a similar way to the energy estimator, a density matrix element only contributes to the numerator of Eq.~\ref{eq:numeratorStaggered} if there are zero or one excitations between the two bitstrings that label the element. Then the contribution is given by $q_{ij}(M^{\dagger})^2_{ij}$, where $(M^{\dagger})^2_{ij}$ is found using the above prescription.
+
+
+%\subsubsection{Spin-Spin Correlation}
+
+\subsection{Heat capacity estimators}
+\label{sec:heatCapacity}
+The fundamental equation of thermodynamics for a system of temperature $T$ that is subject to a uniform magnetic field, $h$, in the $z$-direction can be written,
+\begin{equation}
+dE = dQ + dW = TdS-M_zdh,
+\end{equation}
+where $dE$ is the infinitesimal change in internal energy, $dS$ is the infinitesimal change in entropy for a small flow of heat $dQ$, and $M_zd h$ is the work done on the system's total magnetic dipole moment $\vec{M}$ by the magnetic field.
+
+The heat capacity, $C$, can be defined by $dQ=CdT=TdS$. Assuming that the external magnetic field is constant then
+\begin{equation}
+dE = C_{h}dT,
+\end{equation}
+where $C_{h}$ is now the heat capacity for a constant magnetic field.
+
+Expressing this in terms of $\beta$ one obtains
+\begin{equation}
+C_{h} = -\beta^2\frac{dE}{d\beta}.
+\end{equation}
+
+At this point there is already a route for calculating the heat capacity in a constant magnetic field. DMQMC can easily sample the internal energy, so it is possible to simply differentiate this estimator in order to obtain the finite-temperature spectrum for $C_h$,
+\begin{equation}
+\langle C_{h} \rangle = -\beta^2\frac{d\langle H \rangle}{d\beta}.
+\label{eq:splineDerivative}
+\end{equation}
+In practice the data contains a lot of statistical noise, which makes it difficult to accurately approximate the gradient function of $\langle H\rangle$. However, a smoothing spline fit can be approximated for $\langle H \rangle$ in order to smooth out any statistical fluctuations (Appdx. B). From this the derivative in ~\ref{eq:splineDerivative} can also be approximated.
+
+Another, perhaps more elegant, method would be to sample $C_h$ directly during the DMQMC simulation. 
+If $\langle H \rangle$ is expanded into an orthonormal basis of energy eigenstates $\{\ket{E_i}\}$,
+\begin{equation}
+\langle H \rangle = \frac{\mbox{Tr}(\rho H)}{\mbox{Tr}\rho} = \frac{\sum_{i}\bra{E_i}\rho H\ket{E_i}}{\sum_{i}\bra{E_i}\rho\ket{E_i}}
+= \frac{\sum_{i}\bra{E_i}e^{-\beta E_i}E_i\ket{E_i}}{\sum_{i}\bra{E_i}e^{-\beta E_i}\ket{E_i}}
+,
+\end{equation}
+it is simple to calculate a value of $C_h$ using only the density matrix and the hamiltonian;
+
+\begin{eqnarray}
+C_h &=&  \beta^2\frac{d}{d\beta}\left[ \frac{\sum_{i}\bra{E_i}e^{-\beta E_i}E_i\ket{E_i}}{\sum_{i}\bra{E_i}e^{-\beta E_i}\ket{E_i}} \right]\nonumber\\ 
+&=& \beta^2\frac{\mbox{Tr}(\rho H^2)\mbox{Tr}(\rho)-\mbox{Tr}(\rho H)^2}{\mbox{Tr}(\rho)^2}\nonumber\\
+&=& \beta^2(\langle H^2\rangle - \langle H \rangle^2).
+\label{eq:heatCapacityEstimator}
+\end{eqnarray}
+Where the differentiation is performed using the quotient rule. This is in a form that can be sampled directly during the DMQMC simulation.
+
+It is not immediately obvious whether direct stochastic sampling or a spline fit derivative is best for obtaining $\langle C_h \rangle$, so both will be tested in Sec.~\ref{sec:HeatCapacityResults}.
+
+\subsection{Other estimators}
+During the project estimators for spin-spin correlation and squared energy (required for the directly sampled heat capacity estimator) were also implemented. However, there is not enough room in this report to include the details or results for these estimators.
+
+\subsection{Statistical error calculations}
+\label{sec:statErrCalc}
+A general DMQMC estimator can be written in the form,
+\begin{equation}
+O = \frac{x}{y},
+\end{equation} 
+where $x$ and $y$ are separately averaged over all $\beta$-loops. As $x$ and $y$ are not necessarily uncorrelated, the standard error for the estimator was found by propagating the standard errors in the numerator and denominator using
+\begin{equation}
+\frac{\epsilon_O}{O} = \sqrt{\left(\frac{\epsilon_x}{x}\right)^2 + \left(\frac{\epsilon_y}{y}\right)^2 - 2\frac{\textnormal{Cov}_{xy}}{xy}},
+\end{equation}
+where $\{\epsilon_i\}$ are the standard errors and $\textnormal{Cov}_{xy}$ is the covariance between $x$ and $y$. This error analysis was performed in a post-processing step using a script written in \texttt{PYTHON} in order to avoid unnecessary calculations during the simulation. 
+
+Additionally, it is possible to obtain estimators for ground-state properties. One can average a finite-temperature estimator over consecutive $\beta$-steps once the simulation has settled into the ground-state. The Flyvbjerg and Peterson blocking analysis\cite{Flyvbjerg1989} can be used to take into account the correlations between consecutive $\beta$-steps when calculating the statistical error. During this project James Spencer's \texttt{PYTHON} implementation of this blocking analysis (originally applied to FCIQMC calculations) was employed.
+
+\section{Summary}
+In this chapter the DMQMC algorithm has been developed from an analogy with the imaginary-time Schr\"odinger equation and FCIQMC. In theory it should overcome the main two restrictions of FCIQMC, but may be restrained by the fact that the psips now live in a space that is the size of the Hilbert space of spin configurations squared. Additionally the implementation of the DMQMC algorithm was discussed, along with its application to the Heisenberg model.
+
+% ------------------------------------------------------------------------
+ 
+
+
+%%% Local Variables: 
+%%% mode: latex
+%%% TeX-master: "../thesis"
+%%% End: 

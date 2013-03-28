@@ -1,0 +1,45 @@
+%%% Thesis Introduction --------------------------------------------------
+\chapter{Introduction}
+\ifpdf
+    \graphicspath{{Introduction/IntroductionFigs/PNG/}{Introduction/IntroductionFigs/PDF/}{Introduction/IntroductionFigs/}}
+\else
+    \graphicspath{{Introduction/IntroductionFigs/EPS/}{Introduction/IntroductionFigs/}}
+\fi
+%%% ----------------------------------------------------------------------
+
+%\nomenclature[z]{TISE}{Time-Independent  Schr\"{o}dinger equation}  
+%The distribution and motion of electrons in a solid are described by the time-dependent Schr\"{o}dinger equation (TISE) . It is difficult to describe a macroscopic object accurately without considering the interactions between its constituent parts and in general such an object would consist of a number of constituent parts of the order of Avegadro's number. Solving the Schr\"{o}dinger equation for this many electrons proves extremely difficult. 
+
+%A familiar approach is to replace the electron-electron interactions by a mean-field which allows the Schr\"{o}dinger equation to be separated into many single-body Schr\"{o}dinger equations.\cite{James1996} This mean field theory underpins much of current knowledge in solid-state physics and chemistry, but is found to fail for some ``strongly correlated''\footnote{A strongly correlated solid is one in which electrons experience strong Coulombic repulsion because of the spatial confinement of their orbitals \cite{Imada1998} . } solids, including rare earth metals and transition metal oxides.
+
+\nomenclature[z]{QMC}{Quantum Monte Carlo} 
+\nomenclature[z]{FCI}{Full configuration interaction} 
+\nomenclature[z]{RNG}{Random number generator} 
+The main aim of current electronic structure methods is to calculate the ground-state properties of many-electron systems. Conventional full-configuration interaction (FCI) calculations quickly become unfeasible because the size of the Hilbert space grows exponentially with the number of electrons. Such calculations based on iterative diagonalisation require the storage of at least as many double-precision numbers as twice the size of the Hilbert space \cite{Szabados2011}. 
+
+Quantum Monte Carlo (QMC) methods can provide accurate simulations of many-electron systems via a stochastic sampling of the many-electron wave function. Such methods are favourable if the number of agents or ``walkers'' conducting the stochastic sampling is a small fraction of the size of the Hilbert space. 
+
+Projector methods \cite{Kent1999} such as diffusion Monte Carlo (DMC) rely on the ground-state emerging from the imaginary-time Schr\"odinger equation in the limit of infinite imaginary-time (see Appx. A). However, because DMC does not enforce the constraint that a Fermionic wave function must be anti-symmetric, they suffer from convergence to the incorrect bosonic ground-state in an event known as the ``bosonic catastrophe''. In such cases the fixed-node approximation is applied \cite{Foulkes2001,BajdichMichalandMitas2009}, where \textit{a priori} knowledge of the wave-function is used to restrict the propagation of walkers so that they evolve towards an approximately antisymmetric solution.
+
+%Quantum Monte Carlo (QMC) is a class of numerical algorithms which simulate quantum systems with the aim of solving the quantum many-body problem. The idea is to average a large number of ``computer experiments'', the result of which converges to the exact value of an observable. Surprisingly, with QMC methods it is possible to estimate expectation values for system observables without knowledge of the wave function for that system or enforcing a mean-field approximation. 
+\nomenclature[z]{DMC}{Difussion Monte Carlo} 
+Until recently QMC methods, such as DMC, could only provide numerically exact solutions for systems of many interacting bosons. The ``fermion sign problem'', described above, prevented an exact solution for systems of many interacting fermions. 
+
+However, recently Booth \textit{et al.} \cite{Booth2009} introduced a new approach, known as full configuration-interaction QMC (FCIQMC), in which the antisymmetric property of the many-electron wave function is enforced by working in a discrete space of slater determinants (see Appx. A). The key is the improved efficiency of walker annihilation, which ensures convergence to the fermionic ground-state solution \cite{Spencer2012}.
+
+
+\nomenclature[z]{FCIQMC}{Full configuration interaction quantum Monte Carlo}     
+FCIQMC has two main restrictions. The first is that it proves difficult to calculate the expectation values of operators that do not commute with the Hamiltonian. The second being that it only allows for calculation of expectation values in the ground-state . This project introduces a method that is similar to FCIQMC, but attempts to overcome both of these restrictions. This is done by a stochastic sampling of the many-electron thermal density matrix as a function of inverse-temperature, rather than sampling the many-electron wave function as a function of imaginary-time. This in theory, allows for the calculation of the expectation values of any operator at finite temperatures.
+
+\nomenclature[z]{DMQMC}{Density matrix quantum Monte Carlo} 
+\nomenclature[z]{GFQMC}{Green's function quantum Monte Carlo} 
+In Ch.~\ref{ch:chapter1} the density matrix quantum Monte Carlo (DMQMC) algorithm is developed and an optimised and highly parallel implementation is discussed. In Ch.~\ref{ch:chapter2} DMQMC is applied to the spin-$1/2$ antiferromagnetic Heisenberg model on two and three dimensional bipartite lattices. The results are compared against exact values from the full diagonalisation of the Hamiltonian, for small systems, and accurate FCIQMC or Green's function QMC (GFQMC) estimates for larger systems. Finally, in Ch.~\ref{ch:chapter3} a method of calculating a reduced density matrix for a subsystem of the Heisenberg lattice is developed and this leads into applications in quantum information theory.
+
+Note that a system of units with $\hbar = k_B = 1$ is adopted for all equations in this report.
+
+
+
+%%% Local Variables: 
+%%% mode: latex
+%%% TeX-master: "../thesis"
+%%% End: 
